@@ -1,36 +1,41 @@
 import React, { useEffect } from "react";
-import { ActivityIndicator, View, StatusBar } from "react-native"; // Keep StyleSheet for now if needed elsewhere, or remove if fully replaced
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
+import { ActivityIndicator, View, StatusBar } from "react-native";
+import { router, SplashScreen } from "expo-router";
+import { useAuth } from "./contexts/AuthContext";
 
 const fallbackWhite = "#ffffff";
-const fallbackPrimary = "#007bff";
+const fallbackPrimary = "#06b6d4";
 
 export default function AppEntry() {
+  const { isAuthenticated, isLoading } = useAuth();
+
   useEffect(() => {
-    const checkAuthStatus = async () => {
-      try {
-        const token = await AsyncStorage.getItem("token");
-        console.log("Stored token:", token);
-
-        if (token) {
-          console.log("Token found, navigating to home...");
-          router.replace("/home");
-        } else {
-          console.log("No token found, navigating to signin...");
-          router.replace("/welcome");
-        }
-      } catch (error) {
-        console.error("Failed to check auth status:", error);
-        router.replace("/welcome");
-      }
-    };
-
-    checkAuthStatus();
+    SplashScreen.preventAutoHideAsync();
   }, []);
 
+  useEffect(() => {
+    if (!isLoading) {
+      SplashScreen.hideAsync();
+      if (isAuthenticated) {
+        console.log("AppEntry: Authenticated, navigating to home...");
+        router.replace("/home");
+      } else {
+        console.log("AppEntry: Not authenticated, navigating to welcome...");
+        router.replace("/welcome");
+      }
+    }
+  }, [isLoading, isAuthenticated]);
+
+  if (isLoading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-cyan-50">
+        <StatusBar backgroundColor={fallbackWhite} barStyle="dark-content" />
+        <ActivityIndicator size="large" color={fallbackPrimary} />
+      </View>
+    );
+  }
   return (
-    <View className="flex-1 justify-center items-center bg-white">
+    <View className="flex-1 justify-center items-center bg-cyan-50">
       <StatusBar backgroundColor={fallbackWhite} barStyle="dark-content" />
       <ActivityIndicator size="large" color={fallbackPrimary} />
     </View>

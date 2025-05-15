@@ -39,9 +39,9 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="chat"
+          name="ConversationListScreen"
           options={{
-            title: "Chat",
+            title: "Conversations",
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons
                 name={
