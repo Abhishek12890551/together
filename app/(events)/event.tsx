@@ -7,13 +7,20 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
-  RefreshControl, // Import RefreshControl
+  RefreshControl,
 } from "react-native";
-import React, { useState, useEffect, useCallback } from "react"; // Import useCallback
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { format, parseISO, isSameDay, startOfDay } from "date-fns";
-import axiosInstance from "../../utils/axiosInstance"; // Import axios instance
+import {
+  format,
+  parseISO,
+  isSameDay,
+  startOfDay,
+  isAfter,
+  isSameMonth,
+} from "date-fns";
+import axiosInstance from "../../utils/axiosInstance";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Interface for Event data from backend
@@ -24,11 +31,11 @@ interface Event {
   startDate: string;
   endDate?: string;
   location?: string;
+  category?: string;
 }
 
 export default function EventScreen() {
   const router = useRouter();
-  const [selectedDate, setSelectedDate] = useState(startOfDay(new Date()));
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false); // State for pull-to-refresh
@@ -140,23 +147,54 @@ export default function EventScreen() {
         },
       ]
     );
-  };
+  }; // We've removed the filtered events for today's date
 
-  // Filter events for the selected date
-  const filteredEvents = events.filter((event) => {
-    try {
-      if (event.startDate && typeof event.startDate === "string") {
-        const eventStartDate = startOfDay(parseISO(event.startDate));
-        // Consider events spanning multiple days if endDate exists?
-        // For simplicity, showing events that START on the selected day.
-        return isSameDay(eventStartDate, selectedDate);
-      }
-      return false;
-    } catch (error) {
-      console.error("Error parsing event start date:", event.startDate, error);
-      return false;
-    }
-  });
+  // Get upcoming events for the current month
+  const upcomingEvents = useMemo(() => {
+    const today = startOfDay(new Date());
+    return events
+      .filter((event) => {
+        try {
+          const eventStartDate = parseISO(event.startDate);
+          // Include events that start today or in the future within the current month
+          return (
+            (isAfter(eventStartDate, today) ||
+              isSameDay(eventStartDate, today)) &&
+            isSameMonth(eventStartDate, today)
+          );
+        } catch (error) {
+          console.error(
+            "Error parsing upcoming event date:",
+            event.startDate,
+            error
+          );
+          return false;
+        }
+      })
+      .sort((a, b) => {
+        try {
+          return (
+            parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime()
+          );
+        } catch {
+          return 0;
+        }
+      });
+  }, [events]);
+
+  // Memoized value for next event date
+  const nextEventDate = useMemo(() => {
+    if (upcomingEvents.length === 0) return null;
+
+    // Get the soonest event's start date
+    const soonestEvent = upcomingEvents.reduce((prev, curr) => {
+      const prevDate = parseISO(prev.startDate);
+      const currDate = parseISO(curr.startDate);
+      return isAfter(currDate, prevDate) ? prev : curr;
+    });
+
+    return format(parseISO(soonestEvent.startDate), "EEEE, MMMM d");
+  }, [upcomingEvents]);
 
   // Helper to format date/time range
   const formatEventTime = (startISO: string, endISO?: string): string => {
@@ -183,6 +221,33 @@ export default function EventScreen() {
     } catch (error) {
       console.error("Error formatting event time:", startISO, endISO, error);
       return "Invalid time";
+    }
+  };
+
+  // Format upcoming event dates
+  const formatEventDate = (startISO: string, endISO?: string): string => {
+    try {
+      const startDate = parseISO(startISO);
+
+      if (!endISO) {
+        return format(startDate, "EEE, MMM d");
+      }
+
+      const endDate = parseISO(endISO);
+      if (isSameDay(startDate, endDate)) {
+        return format(startDate, "EEE, MMM d");
+      }
+
+      // If in the same month
+      if (isSameMonth(startDate, endDate)) {
+        return `${format(startDate, "MMM d")} - ${format(endDate, "d")}`;
+      }
+
+      // Different months
+      return `${format(startDate, "MMM d")} - ${format(endDate, "MMM d")}`;
+    } catch (error) {
+      console.error("Error formatting event date:", startISO, endISO, error);
+      return "Invalid date";
     }
   };
 
@@ -216,57 +281,104 @@ export default function EventScreen() {
             </Text>
           </View>
 
-          {/* Event List for Selected Date */}
+          {/* Upcoming Events Section */}
           <Text
             className="font-urbanistMedium text-lg mb-4"
             style={{ color: darkTextColor }}>
-            Events on {format(selectedDate, "EEEE, MMMM d")}
+            Upcoming Events This Month
           </Text>
 
           {isLoading && !refreshing ? (
             <ActivityIndicator
               size="large"
-              color={primaryAccentColor} // Use cyan for loading indicator
+              color={primaryAccentColor}
               className="mt-10"
             />
-          ) : filteredEvents.length === 0 ? (
-            <View className="items-center justify-center py-10">
+          ) : upcomingEvents.length === 0 ? (
+            <View className="items-center justify-center py-5 mb-6">
               <Ionicons
                 name="calendar-outline"
-                size={48}
+                size={36}
                 color={mutedTextColor}
               />
               <Text
-                className="font-urbanist text-base mt-4"
+                className="font-urbanist text-base mt-2"
                 style={{ color: mutedTextColor }}>
-                No events scheduled for this day.
+                No upcoming events this month
               </Text>
             </View>
           ) : (
-            <View className="space-y-4">
-              {filteredEvents.map((event) => (
+            <View className="space-y-4 mb-8">
+              {upcomingEvents.map((event) => (
                 <View
                   key={event._id}
                   className={`${cardBgColor} rounded-xl shadow-sm overflow-hidden`}>
                   <View className={`flex-row items-stretch`}>
-                    {/* Color Indicator - Use cyan */}
-                    <View className={`w-2 bg-cyan-400`} />
+                    {/* Left date indicator */}
+                    <View
+                      className={`w-16 bg-cyan-500 p-2 items-center justify-center`}>
+                      <Text className="font-urbanistBold text-lg text-white">
+                        {format(parseISO(event.startDate), "d")}
+                      </Text>
+                      <Text className="font-urbanistMedium text-xs text-white">
+                        {format(parseISO(event.startDate), "MMM")}
+                      </Text>
+                    </View>
 
                     <View className="flex-1 p-4">
-                      {/* Time and Title */}
-                      <View className="mb-2">
+                      {/* Header with title and action buttons */}
+                      <View className="flex-row justify-between items-start mb-2">
                         <Text
-                          className="font-urbanistBold text-base"
-                          style={{ color: darkTextColor }}>
-                          {formatEventTime(event.startDate, event.endDate)}
-                        </Text>
-                        <Text
-                          className="font-urbanistMedium text-lg mt-1"
+                          className="font-urbanistBold text-lg flex-1"
                           style={{ color: darkTextColor }}>
                           {event.title}
                         </Text>
-                      </View>
 
+                        {/* Action Buttons - Moved to top right */}
+                        <View className="flex-row space-x-3">
+                          <TouchableOpacity
+                            onPress={() => navigateToUpdateEvent(event._id)}
+                            className="p-1">
+                            <Ionicons
+                              name="pencil-outline"
+                              size={18}
+                              color={primaryAccentColor}
+                            />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => handleDeleteEvent(event._id)}
+                            className="p-1">
+                            <Ionicons
+                              name="trash-outline"
+                              size={18}
+                              color={deleteColor}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      {/* Time */}
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons
+                          name="time-outline"
+                          size={16}
+                          color={primaryAccentColor}
+                          className="mr-1"
+                        />
+                        <Text
+                          className="font-urbanistMedium text-sm"
+                          style={{ color: primaryAccentColor }}>
+                          {formatEventTime(event.startDate, event.endDate)}
+                          {event.endDate &&
+                            !isSameDay(
+                              parseISO(event.startDate),
+                              parseISO(event.endDate)
+                            ) &&
+                            ` (until ${format(
+                              parseISO(event.endDate),
+                              "MMM d"
+                            )})`}
+                        </Text>
+                      </View>
                       {/* Location */}
                       {event.location && (
                         <View className="flex-row items-center mb-1 opacity-80">
@@ -283,37 +395,15 @@ export default function EventScreen() {
                           </Text>
                         </View>
                       )}
-
-                      {/* Description */}
+                      {/* Description - with truncation */}
                       {event.description && (
                         <Text
-                          className="font-urbanist text-sm mb-3"
-                          style={{ color: mutedTextColor }}>
+                          className="font-urbanist text-sm"
+                          style={{ color: mutedTextColor }}
+                          numberOfLines={2}>
                           {event.description}
                         </Text>
                       )}
-
-                      {/* Action Buttons */}
-                      <View className="flex-row justify-end space-x-3 pt-2 border-t border-gray-100 mt-2">
-                        <TouchableOpacity
-                          onPress={() => navigateToUpdateEvent(event._id)}
-                          className="p-1">
-                          <Ionicons
-                            name="pencil-outline"
-                            size={20}
-                            color={primaryAccentColor}
-                          />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleDeleteEvent(event._id)}
-                          className="p-1">
-                          <Ionicons
-                            name="trash-outline"
-                            size={20}
-                            color={deleteColor}
-                          />
-                        </TouchableOpacity>
-                      </View>
                     </View>
                   </View>
                 </View>

@@ -175,7 +175,7 @@ export default function SignUp() {
           <View className="items-center mb-6">
             <View className="w-20 h-20 rounded-full overflow-hidden bg-cyan-100/50 mb-4">
               <Image
-                source={require("../../assets/images/logo-placeholder.png")}
+                source={require("../../assets/images/together-icon.png")}
                 className="w-full h-full"
                 resizeMode="cover"
               />
@@ -266,7 +266,7 @@ export default function SignUp() {
                     }
                   }}
                   autoCapitalize="none"
-                  editable={!isSubmitting} 
+                  editable={!isSubmitting}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
@@ -335,8 +335,7 @@ export default function SignUp() {
                 isSubmitting ? "opacity-50" : ""
               }`}
               onPress={handleSubmit}
-              disabled={isSubmitting}
-            >
+              disabled={isSubmitting}>
               {isSubmitting ? (
                 <ActivityIndicator color="white" />
               ) : (

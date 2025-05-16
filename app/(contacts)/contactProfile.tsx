@@ -331,7 +331,7 @@ export default function ContactProfile() {
                   source={{ uri: contactData.profileImageUrl }}
                   className="h-full w-full"
                   resizeMode="cover"
-                  defaultSource={require("../../assets/images/logo-placeholder.png")}
+                  defaultSource={require("../../assets/images/together-icon.png")}
                 />
               ) : (
                 <View className="h-28 w-28 rounded-full bg-white/20 backdrop-blur-md items-center justify-center">

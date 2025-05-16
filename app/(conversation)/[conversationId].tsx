@@ -825,7 +825,7 @@ const ChatScreen = () => {
                   <Image
                     source={{ uri: item.user.profileImageUrl }}
                     className="h-6 w-6 rounded-full mr-1.5"
-                    defaultSource={require("../../assets/images/logo-placeholder.png")}
+                    defaultSource={require("../../assets/images/together-icon.png")}
                   />
                 ) : (
                   <View className="h-6 w-6 rounded-full bg-cyan-200 items-center justify-center mr-1.5">
@@ -995,7 +995,7 @@ const ChatScreen = () => {
             <Image
               source={{ uri: headerProfileImage }}
               className="h-10 w-10 rounded-full"
-              defaultSource={require("../../assets/images/logo-placeholder.png")}
+              defaultSource={require("../../assets/images/together-icon.png")}
             />
           ) : (
             <View className="h-10 w-10 rounded-full bg-cyan-200 items-center justify-center">

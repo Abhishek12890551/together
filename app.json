@@ -4,32 +4,39 @@
     "slug": "together",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/together-logo.png",
+    "icon": "./assets/images/together-icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/Together+.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "image": "./assets/images/together-splash-screen.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#06b6d4"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/together-logo.png",
-        "backgroundColor": "#ffffff"
-      }
+        "foregroundImage": "./assets/images/together-icon.png",
+        "backgroundColor": "#06b6d4"
+      },
+      "package": "com.abhishek_0551.together"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/together-logo.png"
+      "favicon": "./assets/images/together-icon.png"
     },
     "plugins": ["expo-router", "expo-font"],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f3f42a75-0ab8-49bf-addd-d98736475ae1"
+      }
     }
   }
 }

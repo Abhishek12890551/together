@@ -211,14 +211,12 @@ export default function Profile() {
     try {
       setIsUploading(true);
 
-      // Get the token for authentication
       const token = await AsyncStorage.getItem("token");
       if (!token) {
         Alert.alert("Error", "You must be logged in to upload a profile image");
         return;
       }
 
-      // Create form data for the image
       const formData = new FormData();
       const filename = uri.split("/").pop();
       const match = /\.(\w+)$/.exec(filename || "");
@@ -229,7 +227,7 @@ export default function Profile() {
         uri,
         name: filename,
         type,
-      }); // Upload to the server
+      });
       console.log("Uploading image:", formData);
       const response = await axiosInstance.post(
         "/users/upload-profile-image",
@@ -256,7 +254,7 @@ export default function Profile() {
 
         Alert.alert("Success", "Profile image updated successfully");
       }
-    } catch (error:any) {
+    } catch (error: any) {
       console.error("Error uploading image:", error.message);
       Alert.alert("Error", "Failed to upload profile image");
     } finally {
@@ -499,8 +497,7 @@ export default function Profile() {
                 </Text>
               </View>
             </View>
-          </View>
-
+          </View> 
           {/* App Settings */}
           <View className="bg-white rounded-2xl shadow-sm p-6 mb-6">
             <Text className="text-xl font-urbanistBold text-cyan-800 mb-4">
@@ -544,6 +541,26 @@ export default function Profile() {
               />
             </TouchableOpacity>
 
+            <TouchableOpacity
+              className="flex-row items-center py-3 border-b border-gray-100"
+              onPress={() => router.push("/(profile)/app-info")}>
+              <View className="w-10 h-10 rounded-full bg-cyan-100 items-center justify-center">
+                <Ionicons
+                  name="information-circle-outline"
+                  size={20}
+                  color={primaryColor}
+                />
+              </View>
+              <Text className="font-urbanistMedium text-gray-800 ml-4 flex-1">
+                App Info
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={mutedTextColor}
+              />
+            </TouchableOpacity>
+
             <TouchableOpacity className="flex-row items-center py-3">
               <View className="w-10 h-10 rounded-full bg-cyan-100 items-center justify-center">
                 <Ionicons
@@ -562,7 +579,6 @@ export default function Profile() {
               />
             </TouchableOpacity>
           </View>
-
           {/* Account */}
           <View className="bg-white rounded-2xl shadow-sm p-6 mb-6">
             <Text className="text-xl font-urbanistBold text-cyan-800 mb-4">
@@ -619,14 +635,15 @@ export default function Profile() {
                 Sign Out
               </Text>
             </TouchableOpacity>
-          </View>
-
+          </View> 
           {/* App Version */}
-          <View className="items-center py-4">
-            <Text className="font-urbanist text-gray-500 text-sm">
+          <TouchableOpacity
+            className="items-center py-4"
+            onPress={() => router.push("/(profile)/app-info")}>
+            <Text className="font-urbanist text-cyan-600 text-sm">
               Together App Version 1.0.0
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </Animated.ScrollView>
     </SafeAreaView>

@@ -135,7 +135,7 @@ export default function SignIn() {
           <View className="items-center mb-8">
             <View className="w-20 h-20 rounded-full overflow-hidden bg-cyan-100/50 mb-4">
               <Image
-                source={require("../../assets/images/logo-placeholder.png")}
+                source={require("../../assets/images/together-icon.png")}
                 className="w-full h-full"
                 resizeMode="cover"
               />

@@ -11,7 +11,7 @@ import {
   Dimensions, // Make sure Dimensions is imported if used for styling (though not directly in this logic)
   Image,
 } from "react-native";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, Entypo } from "@expo/vector-icons"; // Added Entypo for example
 import {
@@ -382,6 +382,32 @@ export default function Home() {
     })
     .slice(0, 3);
 
+  // Get all upcoming events for the current month
+  const upcomingEventsForCurrentMonth = useMemo(() => {
+    const today = startOfDay(new Date());
+
+    return monthlyEvents
+      .filter((event) => {
+        try {
+          const eventStartDate = parseISO(event.startDate);
+          // Include events that start today or in the future
+          return eventStartDate >= today;
+        } catch {
+          return false;
+        }
+      })
+      .sort((a, b) => {
+        try {
+          return (
+            parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime()
+          );
+        } catch {
+          return 0;
+        }
+      })
+      .slice(0, 5); // Show top 5 upcoming events
+  }, [monthlyEvents]);
+
   // Filter todos to get the most important incomplete ones
   const filteredTopTodos = allTodos
     .filter((todo) => !todo.completed) // Only show incomplete todos
@@ -447,6 +473,31 @@ export default function Home() {
     }
   };
 
+  // Format dates for upcoming events display
+  const formatEventDate = (startISO: string, endISO?: string): string => {
+    try {
+      const startDate = parseISO(startISO);
+      if (!endISO) {
+        return format(startDate, "EEE, MMM d");
+      }
+
+      const endDate = parseISO(endISO);
+      if (isSameDay(startDate, endDate)) {
+        return format(startDate, "EEE, MMM d");
+      }
+
+      // If in the same month
+      if (isSameMonth(startDate, endDate)) {
+        return `${format(startDate, "MMM d")} - ${format(endDate, "d")}`;
+      }
+
+      // Different months
+      return `${format(startDate, "MMM d")} - ${format(endDate, "MMM d")}`;
+    } catch {
+      return "Invalid date";
+    }
+  };
+
   // --- Styling and Content Constants ---
   const backgroundColor = "#ecfeff";
   const primaryDarkColor = "#0891b2";
@@ -474,11 +525,11 @@ export default function Home() {
     const category = categories.find(
       (cat) => cat.name.toLowerCase() === categoryName.toLowerCase()
     );
-    return category ? category.color : "bg-cyan-500"; // Default to cyan if no match
+    return category ? category.color : "bg-cyan-500";
   };
 
   const getTodoColor = (title: string | undefined): string => {
-    if (!title) return "bg-gray-400"; // Default color
+    if (!title) return "bg-gray-400";
 
     // Available color classes
     const colorOptions = [
@@ -527,7 +578,7 @@ export default function Home() {
               <Text className="font-urbanistBold text-cyan-700 text-2xl">
                 {userName || "Loading..."}
               </Text>
-            </View> 
+            </View>
             <TouchableOpacity
               onPress={() => router.push("/profile")}
               className="w-12 h-12 rounded-full bg-cyan-100 border border-cyan-300 items-center justify-center overflow-hidden">
@@ -546,24 +597,18 @@ export default function Home() {
               )}
             </TouchableOpacity>
           </View>
-
           {/* Calendar Controls */}
           <View className="mb-6">
             <View className="flex-row justify-between items-center mb-3">
-              <TouchableOpacity
-                onPress={showDatePickerModal}
-                className="flex-row items-center">
-                <Text className="font-urbanistMedium text-lg text-gray-800 mr-1">
-                  {calendarViewMode === "week"
-                    ? format(selectedDate, "MMMM yyyy")
-                    : format(currentMonth, "MMMM yyyy")}
+              {calendarViewMode === "month" ? (
+                <Text className="font-urbanistMedium text-lg text-gray-800">
+                  {format(currentMonth, "MMMM yyyy")}
                 </Text>
-                <Ionicons
-                  name="chevron-down"
-                  size={20}
-                  color={primaryDarkColor}
-                />
-              </TouchableOpacity>
+              ) : (
+                <Text className="font-urbanistMedium text-lg text-gray-800">
+                  {format(selectedDate, "MMMM yyyy")}
+                </Text>
+              )}
               <View className="flex-row items-center">
                 <TouchableOpacity onPress={goToToday} className="p-1 mr-2">
                   <Text className="font-urbanistMedium text-red-500">
@@ -694,7 +739,6 @@ export default function Home() {
               </View>
             )}
           </View>
-
           {/* --- Schedule Section --- */}
           <View className="mb-6">
             <View className="flex-row justify-between items-center mb-3">
@@ -765,7 +809,6 @@ export default function Home() {
               )}
             </View>
           </View>
-
           {/* --- To-Do List Section --- */}
           <View className="mb-6">
             <View className="flex-row justify-between items-center mb-3">
@@ -822,12 +865,11 @@ export default function Home() {
               )}
             </View>
           </View>
-
-          {/* --- Events Section --- */}
+          {/* --- Upcoming Events Section --- */}
           <View className="mb-6">
             <View className="flex-row justify-between items-center mb-3">
               <Text className="font-urbanistMedium text-lg text-gray-800">
-                Events for {format(selectedDate, "MMM d")}
+                Upcoming Events This Month
               </Text>
               <TouchableOpacity
                 onPress={() => router.push("/(events)/event")}
@@ -845,12 +887,12 @@ export default function Home() {
               }`}>
               {isLoading && !refreshing ? (
                 <ActivityIndicator color={primaryColor} />
-              ) : filteredEventsForSelectedDate.length > 0 ? (
+              ) : upcomingEventsForCurrentMonth.length > 0 ? (
                 <View className="space-y-3">
-                  {filteredEventsForSelectedDate.map((item) => {
+                  {upcomingEventsForCurrentMonth.map((item) => {
                     const eventColor = item.category
                       ? getCategoryColor(item.category)
-                      : "bg-violet-500"; // Use category color or default
+                      : "bg-violet-500";
                     return (
                       <View
                         key={item._id}
@@ -861,7 +903,6 @@ export default function Home() {
                         <View className="flex-1">
                           <View className="flex-row justify-between items-center mb-0.5">
                             <Text className="font-urbanistBold text-base text-cyan-800">
-                              {formatEventTime(item.startDate, item.endDate)} - 
                               {item.title}
                             </Text>
                             {item.category && (
@@ -873,8 +914,27 @@ export default function Home() {
                               </View>
                             )}
                           </View>
+                          <View className="flex-row items-center mt-0.5">
+                            <Ionicons
+                              name="calendar-outline"
+                              size={14}
+                              color={primaryDarkColor}
+                            />
+                            <Text className="font-urbanistMedium text-sm text-cyan-800 ml-1">
+                              {formatEventDate(item.startDate, item.endDate)}
+                            </Text>
+                            <Text className="font-urbanist text-sm text-gray-600 ml-3">
+                              {format(parseISO(item.startDate), "h:mm a")}
+                              {item.endDate &&
+                                !isSameDay(
+                                  parseISO(item.startDate),
+                                  parseISO(item.endDate)
+                                ) &&
+                                " →"}
+                            </Text>
+                          </View>
                           {item.location && (
-                            <View className="flex-row items-center mt-0.5">
+                            <View className="flex-row items-center mt-1">
                               <Ionicons
                                 name="location-outline"
                                 size={14}
@@ -885,12 +945,6 @@ export default function Home() {
                               </Text>
                             </View>
                           )}
-                          {item.description && (
-                            <Text className="font-urbanist text-gray-500 text-xs mt-1">
-                              {item.description.substring(0, 60)}
-                              {item.description.length > 60 ? "..." : ""}
-                            </Text>
-                          )}
                         </View>
                       </View>
                     );
@@ -899,18 +953,17 @@ export default function Home() {
               ) : (
                 <View className="justify-center items-center min-h-[80px]">
                   <Ionicons
-                    name="sparkles-outline"
+                    name="calendar-outline"
                     size={32}
                     color={mutedTextColor}
                   />
                   <Text className="font-urbanist text-gray-600 mt-2">
-                    No events scheduled for this day.
+                    No upcoming events this month.
                   </Text>
                 </View>
               )}
             </View>
           </View>
-
           {/* Bottom Spacer */}
           <View className="h-20" />
         </View>
