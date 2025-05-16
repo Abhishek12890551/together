@@ -41,8 +41,10 @@ interface ChatMessage {
   user: ChatMessageUser;
   conversationId: string;
   // Add other custom properties: sent, received, readBy, etc.
-  isRead?: boolean;
-  pending?: boolean;
+  isRead?: boolean; // message read status (for incoming)
+  pending?: boolean; // optimistic send
+  deliveredTo?: string[]; // delivery ACKs
+  readBy?: string[]; // IDs of users who have read this message
 }
 
 interface MessageFromApiOrSocket {
@@ -55,6 +57,7 @@ interface MessageFromApiOrSocket {
     profileImageUrl?: string;
   };
   readBy?: string[];
+  deliveredTo?: string[];
   conversationId: string;
 }
 
@@ -149,6 +152,8 @@ const ChatScreen = () => {
   const { user: authUser, token } = useAuth();
   const { socket, isConnected, attemptReconnect, serverUrl } = useSocket();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Index of the first unread incoming message for highlight divider
+  const [firstUnreadIndex, setFirstUnreadIndex] = useState<number | null>(null);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingEarlier, setIsLoadingEarlier] = useState(false);
@@ -182,6 +187,8 @@ const ChatScreen = () => {
       },
       conversationId: msg.conversationId,
       isRead: msg.readBy && authUser ? msg.readBy.includes(authUser.id) : false,
+      deliveredTo: msg.deliveredTo || [],
+      readBy: msg.readBy || [],
     };
   };
 
@@ -322,167 +329,125 @@ const ChatScreen = () => {
         );
       }
       const handleNewMessage = (socketMsg: MessageFromApiOrSocket) => {
-        if (socketMsg.conversationId === conversationId) {
+        if (socketMsg.conversationId !== conversationId) {
+          return;
+        }
+
+        setMessages((prevMessages) => {
+          if (!authUser) {
+            // Should not happen if user is in chat screen, but good to guard
+            return prevMessages;
+          }
+
+          // Check 1: If this exact message ID already exists in our state, ignore.
+          if (prevMessages.some((m) => m._id === socketMsg._id)) {
+            console.log(
+              `[ChatScreen] handleNewMessage: Duplicate _id ${socketMsg._id} found in prevMessages. Ignoring.`
+            );
+            return prevMessages;
+          }
+
           const formattedMsg = formatMessageForDisplay(socketMsg);
 
-          const isDuplicate = messages.some(
+          // Check 2: Attempt to find a matching optimistic (temporary) message to replace.
+          const optimisticMatchIndex = prevMessages.findIndex(
             (msg) =>
               msg._id.startsWith("temp_") &&
-              msg.user._id === authUser?.id &&
-              msg.text === formattedMsg.text &&
-              new Date().getTime() - msg.createdAt.getTime() < 5000
+              msg.user._id === authUser.id &&
+              msg.text === formattedMsg.text && // Compare content
+              // Optional: Check if the optimistic message is recent enough
+              new Date().getTime() - msg.createdAt.getTime() < 10000 // 10 seconds window
           );
 
-          if (
-            scrollOffsetRef.current > 100 &&
-            socketMsg.sender._id !== authUser?.id
-          ) {
+          let newMessagesArray;
+          if (optimisticMatchIndex !== -1) {
+            // Optimistic message found: replace it with the server-confirmed one.
+            newMessagesArray = [...prevMessages];
+            newMessagesArray[optimisticMatchIndex] = formattedMsg;
+            console.log(
+              `[ChatScreen] handleNewMessage: Replaced optimistic message with server confirmed _id ${formattedMsg._id}.`
+            );
+          } else {
+            // No optimistic message matched (or it's a message from another user).
+            // Since we've already checked that formattedMsg._id is not in prevMessages,
+            // we can safely add it.
+            newMessagesArray = [...prevMessages, formattedMsg];
+            console.log(
+              `[ChatScreen] handleNewMessage: Added new message with _id ${formattedMsg._id}.`
+            );
+          }
+
+          // Always sort messages by creation time after any modification.
+          return newMessagesArray.sort(
+            (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+          );
+        });
+
+        // --- Handle side-effects (scrolling, emitting other events) ---
+        // These should use `socketMsg` (the direct input) and `authUser` (from component scope).
+
+        if (socketMsg.sender._id !== authUser?.id) {
+          // Incoming message from another user
+          if (scrollOffsetRef.current > 100) {
             setHasNewMessages(true);
             setShowScrollToBottom(true);
           }
 
-          if (!isDuplicate) {
-            setMessages((prevMessages) => {
-              const newMessages = [...prevMessages, formattedMsg].sort(
-                (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
-              );
-
-              if (
-                socketMsg.sender._id === authUser?.id ||
-                scrollOffsetRef.current < 100
-              ) {
-                setTimeout(() => {
-                  flatListRef.current?.scrollToEnd({ animated: true });
-                }, 100);
-              }
-
-              return newMessages;
+          // Emit "delivered" and "read" acknowledgements
+          if (socketMsg._id && typeof socketMsg._id === "string") {
+            socket?.emit("messageDelivered", {
+              conversationId,
+              messageId: socketMsg._id,
             });
-          } else {
-            setMessages((prevMessages) => {
-              const newMessages = prevMessages.map((msg) =>
-                msg._id.startsWith("temp_") &&
-                msg.user._id === authUser?.id &&
-                msg.text === formattedMsg.text
-                  ? formattedMsg
-                  : msg
-              );
-
-              setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-              }, 100);
-
-              return newMessages;
-            });
+            // The messageRead emission will eventually trigger handleMessageReadUpdate,
+            // which updates the `readBy` array and `isRead` status.
+            setTimeout(() => {
+              socket?.emit("messageRead", {
+                conversationId,
+                messageId: socketMsg._id,
+              });
+            }, 300); // Delay to allow delivery to process if needed
           }
-          // When we receive a new message that's not ours, mark it as read
-          if (socketMsg.sender._id !== authUser?.id) {
-            if (socketMsg._id && typeof socketMsg._id === "string") {
-              console.log(`Marking message as read: ${socketMsg._id}`);
+        } else {
+          // Message is from the current user (server confirmation)
+          // Auto-scroll to bottom for messages sent by the current user
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 100);
+        }
 
-              // Immediately update local state to show it's read
-              setMessages((prevMessages) =>
-                prevMessages.map((msg) =>
-                  msg._id === socketMsg._id ? { ...msg, isRead: true } : msg
-                )
-              );
-
-              // Notify the server that the message has been read
-              setTimeout(() => {
-                try {
-                  socket.emit("messageRead", {
-                    conversationId,
-                    messageId: socketMsg._id,
-                    readBy: authUser?.id,
-                    timestamp: new Date().toISOString(),
-                  });
-                  console.log(`Emitted messageRead for: ${socketMsg._id}`);
-                } catch (error) {
-                  console.error("Error emitting messageRead event:", error);
-                }
-              }, 300);
-            } else {
-              console.warn(
-                "Cannot mark message as read: invalid message ID",
-                socketMsg
-              );
-            }
-          } else {
-            // This is a message I sent that was confirmed by the server
-            if (socketMsg._id && !socketMsg._id.startsWith("temp_")) {
-              setMessages((prevMessages) =>
-                prevMessages.map((msg) =>
-                  msg.user._id === authUser?.id &&
-                  msg.text === socketMsg.content &&
-                  msg._id.startsWith("temp_")
-                    ? { ...msg, _id: socketMsg._id, pending: false }
-                    : msg
-                )
-              );
-            }
-          }
+        // Auto-scroll if user is already near the bottom when an incoming message arrives
+        if (
+          socketMsg.sender._id !== authUser?.id &&
+          scrollOffsetRef.current < 100
+        ) {
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 100);
         }
       };
-      const handleMessageReadUpdate = (updatedMessage: any) => {
-        console.log("Message read update received:", updatedMessage);
-
-        // Check if the updated message belongs to our conversation
-        if (updatedMessage.conversationId === conversationId) {
-          console.log("Message marked as read:", updatedMessage);
-
-          const messageId = updatedMessage.messageId || updatedMessage._id;
-
-          if (!messageId) {
-            console.warn(
-              "Invalid message read update: no message ID found",
-              updatedMessage
-            );
-            return;
-          }
-
-          // Update all messages from this sender that should be marked as read
-          setMessages((prevMessages) => {
-            let updated = false;
-            const newMessages = prevMessages.map((msg) => {
-              // Check if this is the specific message being marked as read
-              if (msg._id === messageId) {
-                console.log(
-                  `Updating read status for exact message match: ${msg._id}`
-                );
-                updated = true;
-                return { ...msg, isRead: true };
-              }
-
-              // Also update messages created before this one (in case of batch updates)
-              // Only if the messages belong to the same sender (user)
-              if (
-                updatedMessage.senderId &&
-                msg.user._id === updatedMessage.senderId &&
-                !msg.isRead &&
-                msg.createdAt <=
-                  new Date(updatedMessage.timestamp || Date.now())
-              ) {
-                console.log(
-                  `Updating read status for earlier message: ${msg._id}`
-                );
-                updated = true;
-                return { ...msg, isRead: true };
-              }
-
-              return msg;
-            });
-
-            if (updated) {
-              console.log("Messages updated with new read status");
-              // Optionally trigger a debug to see the updated state
-              setTimeout(() => debugReadStatus(), 100);
-            } else {
-              console.warn("No messages were updated with read status");
-            }
-
-            return newMessages;
-          });
-        }
+      // Handle read acknowledgements: update isRead and readBy arrays
+      // Handle read acknowledgements: update isRead and readBy arrays
+      const handleMessageReadUpdate = (data: {
+        conversationId: string;
+        messageId: string;
+        readBy: string;
+      }) => {
+        const { conversationId: cId, messageId, readBy: readerId } = data;
+        if (cId !== conversationId || !messageId) return;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg._id === messageId
+              ? {
+                  ...msg,
+                  isRead: true,
+                  readBy: Array.isArray(msg.readBy)
+                    ? Array.from(new Set([...msg.readBy, readerId]))
+                    : [readerId],
+                }
+              : msg
+          )
+        );
       };
       // ... (handleMessageReadUpdate, handleUserTyping - similar to GiftedChat version) ...
       const handleUserTyping = (data: {
@@ -503,6 +468,31 @@ const ChatScreen = () => {
       socket.on("newMessage", handleNewMessage);
       socket.on("userTyping", handleUserTyping);
       socket.on("messageRead", handleMessageReadUpdate);
+      // Handle delivered updates
+      const handleMessageDeliveredUpdate = (data: {
+        conversationId: string;
+        messageId: string;
+        deliveredBy: string;
+        timestamp?: string;
+      }) => {
+        if (data.conversationId === conversationId) {
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg._id === data.messageId) {
+                const updatedDelivered = msg.deliveredTo
+                  ? [...msg.deliveredTo]
+                  : [];
+                if (!updatedDelivered.includes(data.deliveredBy)) {
+                  updatedDelivered.push(data.deliveredBy);
+                }
+                return { ...msg, deliveredTo: updatedDelivered };
+              }
+              return msg;
+            })
+          );
+        }
+      };
+      socket.on("messageDelivered", handleMessageDeliveredUpdate);
 
       return () => {
         console.log(
@@ -512,9 +502,10 @@ const ChatScreen = () => {
         socket.off("newMessage", handleNewMessage);
         socket.off("userTyping", handleUserTyping);
         socket.off("messageRead", handleMessageReadUpdate);
+        socket.off("messageDelivered", handleMessageDeliveredUpdate);
       };
     }
-  }, [socket, isConnected, conversationId, authUser, messages]); // Dedicated useEffect for user online/offline status
+  }, [socket, isConnected, conversationId, authUser]); // Socket listeners effect (messages removed to avoid re-registering)
   useEffect(() => {
     if (socket && isConnected && otherParticipantId && conversationId) {
       console.log(
@@ -662,14 +653,26 @@ const ChatScreen = () => {
       messages.length > 0 &&
       authUser
     ) {
-      // Find messages from others that might need to be marked as read
-      const unreadMessages = messages.filter(
+      // 1) Emit delivered ack for any incoming messages not yet delivered
+      messages.forEach((msg) => {
+        if (
+          msg.user._id !== authUser.id &&
+          !(msg.deliveredTo || []).includes(authUser.id)
+        ) {
+          console.log(`Emitting delivered for msg ${msg._id}`);
+          socket.emit("messageDelivered", {
+            conversationId,
+            messageId: msg._id,
+          });
+        }
+      });
+      // 2) Emit read ack for any incoming messages not yet read
+      const unread = messages.filter(
         (msg) => msg.user._id !== authUser.id && !msg.isRead
       );
-
-      if (unreadMessages.length > 0) {
-        console.log(`Marking ${unreadMessages.length} messages as read`);
-        unreadMessages.forEach((msg) => {
+      if (unread.length > 0) {
+        console.log(`Marking ${unread.length} messages as read`);
+        unread.forEach((msg) => {
           socket.emit("messageRead", {
             conversationId,
             messageId: msg._id,
@@ -678,6 +681,21 @@ const ChatScreen = () => {
       }
     }
   }, [socket, isConnected, conversationId, messages, authUser]);
+
+  // Compute index of first unread incoming message to show highlight
+  useEffect(() => {
+    if (authUser && messages.length > 0) {
+      const idx = messages.findIndex(
+        (msg) =>
+          msg.user._id !== authUser.id &&
+          // incoming message not yet marked read
+          !msg.isRead
+      );
+      setFirstUnreadIndex(idx >= 0 ? idx : null);
+    } else {
+      setFirstUnreadIndex(null);
+    }
+  }, [messages, authUser]);
 
   const handleSend = () => {
     if (!inputText.trim()) return;
@@ -766,6 +784,8 @@ const ChatScreen = () => {
     const currentMsgDate = item.createdAt;
     const previousMessage = index > 0 ? messages[index - 1] : null;
 
+    // Divider indicating start of unread messages
+    const showUnreadDivider = firstUnreadIndex === index;
     // Check if we should show date header (first message or different day from previous)
     const showDateHeader =
       index === 0 ||
@@ -785,6 +805,16 @@ const ChatScreen = () => {
             <View className="bg-cyan-100 rounded-full px-3 py-1">
               <Text className="text-xs font-urbanistMedium text-cyan-700">
                 {formatMessageDate(currentMsgDate)}
+              </Text>
+            </View>
+          </View>
+        )}
+        {/* Unread messages divider */}
+        {showUnreadDivider && (
+          <View className="py-2 px-4 items-center">
+            <View className="bg-rose-100 rounded-full px-3 py-1">
+              <Text className="text-xs font-urbanistMedium text-rose-700">
+                New messages
               </Text>
             </View>
           </View>
@@ -848,22 +878,55 @@ const ChatScreen = () => {
                   </Text>
                 )}
                 {isMyMessage && item.pending && (
-                  <Ionicons name="time-outline" size={14} color="#0891b2" />
+                  // Message is pending (not sent to server yet)
+                  <Ionicons name="time-outline" size={14} color="gray" />
                 )}
-                {isMyMessage && !item.pending && item.isRead && (
-                  <Ionicons
-                    name="checkmark-done-outline"
-                    size={14}
-                    color="#0891b2"
-                  />
-                )}
-                {isMyMessage && !item.pending && !item.isRead && (
-                  <Ionicons
-                    name="checkmark-outline"
-                    size={14}
-                    color="#0891b2"
-                  />
-                )}
+                {isMyMessage &&
+                  !item.pending &&
+                  (() => {
+                    // Determine recipient ID(s)
+                    const recipientId = !isGroupChat && otherParticipantId;
+                    // Check delivered status
+                    const isDelivered =
+                      item.deliveredTo &&
+                      (isGroupChat
+                        ? item.deliveredTo.length > 0
+                        : typeof recipientId === "string" &&
+                          item.deliveredTo.includes(recipientId));
+                    // Check read status (for outgoing, check if recipient has read)
+                    const isMessageRead =
+                      typeof recipientId === "string"
+                        ? item.readBy?.includes(recipientId)
+                        : Array.isArray(item.readBy) && item.readBy.length > 0;
+                    if (!isDelivered) {
+                      // Sent but not delivered
+                      return (
+                        <Ionicons
+                          name="checkmark-outline"
+                          size={14}
+                          color="gray"
+                        />
+                      );
+                    }
+                    if (isDelivered && !isMessageRead) {
+                      // Delivered but not read
+                      return (
+                        <Ionicons
+                          name="checkmark-done-outline"
+                          size={14}
+                          color="gray"
+                        />
+                      );
+                    }
+                    // Read
+                    return (
+                      <Ionicons
+                        name="checkmark-done-outline"
+                        size={14}
+                        color="#0891b2"
+                      />
+                    );
+                  })()}
               </View>
             </View>
           </View>
