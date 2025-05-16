@@ -335,11 +335,9 @@ const ChatScreen = () => {
 
         setMessages((prevMessages) => {
           if (!authUser) {
-            // Should not happen if user is in chat screen, but good to guard
             return prevMessages;
           }
 
-          // Check 1: If this exact message ID already exists in our state, ignore.
           if (prevMessages.some((m) => m._id === socketMsg._id)) {
             console.log(
               `[ChatScreen] handleNewMessage: Duplicate _id ${socketMsg._id} found in prevMessages. Ignoring.`
