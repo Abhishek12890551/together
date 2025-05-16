@@ -70,9 +70,8 @@ export default function WelcomeScreen() {
           </View>
 
           <Text className="font-ubuntuMedium text-3xl text-gray-800 mt-6">
-            Welcome to 
-            <Text className="text-cyan-500 font-ubuntuBold">Together</Text> 
-            <Text className="text-red-500 font-ubuntuBold">+</Text>
+            Welcome to
+            <Text className="text-cyan-500 font-ubuntuBold"> Together</Text>
           </Text>
 
           <Text className="font-plusJakarta text-gray-600 text-center mt-3 text-base">
@@ -96,7 +95,7 @@ export default function WelcomeScreen() {
 
             <View className="flex-row justify-center mt-6 mb-6">
               <Text className="text-gray-600 font-plusJakarta">
-                Already have an account? 
+                Already have an account?
               </Text>
               <TouchableOpacity onPress={() => router.push("/signin")}>
                 <Text className="text-cyan-600 font-plusJakartaBold">
@@ -108,11 +107,11 @@ export default function WelcomeScreen() {
 
           {/* Terms text */}
           <Text className="text-gray-500 text-center text-sm font-plusJakarta pb-4">
-            By signing up, you agree to our 
+            By signing up, you agree to our
             <Text className="text-cyan-500 font-plusJakartaMedium">
               Terms of Service
-            </Text> 
-            and 
+            </Text>
+            and
             <Text className="text-cyan-500 font-plusJakartaMedium">
               Privacy Policy
             </Text>

@@ -7,22 +7,22 @@ import {
   StatusBar,
   TextInput,
   Alert,
-  ActivityIndicator, // Import ActivityIndicator
+  ActivityIndicator,
 } from "react-native";
 import React, { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import DateTimePickerModal from "react-native-modal-datetime-picker"; // Assuming you use this library
+import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { format } from "date-fns";
-import axiosInstance from "../../utils/axiosInstance"; // Import axios instance
+import axiosInstance from "../../utils/axiosInstance";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Interface for Event payload
 interface EventPayload {
   title: string;
   description?: string;
-  startDate: string; // ISO String format
-  endDate?: string; // ISO String format
+  startDate: string; 
+  endDate?: string; 
   location?: string;
 }
 

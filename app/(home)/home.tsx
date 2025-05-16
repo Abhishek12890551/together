@@ -8,12 +8,12 @@ import {
   Platform,
   ActivityIndicator,
   RefreshControl,
-  Dimensions, // Make sure Dimensions is imported if used for styling (though not directly in this logic)
+  Dimensions,
   Image,
 } from "react-native";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons, Entypo } from "@expo/vector-icons"; // Added Entypo for example
+import { Ionicons, Entypo } from "@expo/vector-icons";
 import {
   format,
   startOfWeek,
@@ -30,22 +30,13 @@ import {
   subDays,
   parseISO,
   startOfDay,
-  // isWithinInterval, // Uncomment if using for multi-day event display
 } from "date-fns";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
-import axiosInstance from "../../utils/axiosInstance"; // Ensure this path is correct
-import { useAuth } from "../contexts/AuthContext"; // Ensure this path is correct
-
-// --- Interfaces (Verify these match your data structures) ---
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  profileImageUrl?: string;
-}
+import axiosInstance from "../../utils/axiosInstance";
+import { useAuth } from "../contexts/AuthContext";
 
 interface WeekDate {
   day: string;
@@ -70,7 +61,7 @@ interface Schedule {
   endTime: string;
   category: string;
   note?: string;
-  date: string; // ISO Date string
+  date: string;
 }
 
 interface Todo {
@@ -85,7 +76,7 @@ interface Todo {
 interface Event {
   _id: string;
   title: string;
-  startDate: string; // ISO Date string
+  startDate: string;
   endDate?: string;
   location?: string;
   description?: string;
@@ -96,7 +87,7 @@ interface Event {
 interface ApiCollectionResponse<T> {
   success: boolean;
   count?: number;
-  data: T[]; // Assuming data is always an array for collections
+  data: T[];
   message?: string;
 }
 
@@ -130,15 +121,14 @@ export default function Home() {
   const generateMonthDates = useCallback(
     (monthDate: Date, selected: Date): CalendarDate[] => {
       const monthStart = startOfMonth(monthDate);
-      const startDayOfWeek = getDay(monthStart); // 0 (Sun) - 6 (Sat)
-      const weekStartsOn = 1; // 1 for Monday
+      const startDayOfWeek = getDay(monthStart);
+      const weekStartsOn = 1;
       const correctedStartDayOfWeek = (startDayOfWeek - weekStartsOn + 7) % 7;
 
       const datesArray: CalendarDate[] = [];
       const startDateForCalendar = subDays(monthStart, correctedStartDayOfWeek);
 
       for (let i = 0; i < 42; i++) {
-        // 6 weeks * 7 days
         const loopDate = addDays(startDateForCalendar, i);
         datesArray.push({
           date: loopDate,
@@ -155,16 +145,16 @@ export default function Home() {
   );
 
   const getWeekDates = useCallback((referenceDate: Date) => {
-    const start = startOfWeek(referenceDate, { weekStartsOn: 1 }); // Week starts on Monday
+    const start = startOfWeek(referenceDate, { weekStartsOn: 1 });
     const datesArray: WeekDate[] = [];
     for (let i = 0; i < 7; i++) {
       const currentDate = addDays(start, i);
       datesArray.push({
-        day: format(currentDate, "EEE"), // e.g., "Mon"
-        date: format(currentDate, "d"), // e.g., "15"
+        day: format(currentDate, "EEE"),
+        date: format(currentDate, "d"),
         isToday: isToday(currentDate),
         fullDate: currentDate,
-        isSunday: getDay(currentDate) === 0, // Sunday
+        isSunday: getDay(currentDate) === 0,
       });
     }
     setWeekDates(datesArray);
@@ -194,10 +184,10 @@ export default function Home() {
       const [scheduleRes, todoRes, eventRes] = await Promise.all([
         axiosInstance.get<ApiCollectionResponse<Schedule>>("/schedules", {
           params: {
-            date: selectedDateFormatted, // Fetch schedules for selected date
+            date: selectedDateFormatted,
           },
         }),
-        axiosInstance.get<ApiCollectionResponse<Todo>>("/todos"), // Specify response type
+        axiosInstance.get<ApiCollectionResponse<Todo>>("/todos"),
         axiosInstance.get<ApiCollectionResponse<Event>>("/events", {
           params: {
             startDate: format(monthStartDate, "yyyy-MM-dd"),
@@ -221,14 +211,25 @@ export default function Home() {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, [authTokenFromContext, currentMonth, selectedDate]); // Added selectedDate as dependency
+  }, [authTokenFromContext, currentMonth, selectedDate]);
 
   useEffect(() => {
     if (user) {
       setUserName(user.name || "User");
     } else {
       const fetchUserFromStorage = async () => {
-        /* ... (same as before) ... */
+        try {
+          const userData = await AsyncStorage.getItem("user");
+          if (userData) {
+            const parsedUser = JSON.parse(userData);
+            setUserName(parsedUser.name || "User");
+          } else {
+            setUserName("User");
+          }
+        } catch (error) {
+          console.error("Error fetching user from storage:", error);
+          setUserName("User");
+        }
       };
       fetchUserFromStorage();
     }
@@ -267,7 +268,7 @@ export default function Home() {
     if (authTokenFromContext) {
       fetchData();
     } else {
-      setRefreshing(false); // Stop refreshing if no token
+      setRefreshing(false);
     }
   }, [fetchData, authTokenFromContext]);
 
@@ -276,14 +277,13 @@ export default function Home() {
 
   const handleDateSelect = (date: Date) => {
     const newSelectedDate = startOfDay(date);
-    setSelectedDate(newSelectedDate); // Ensure selectedDate is always start of day
+    setSelectedDate(newSelectedDate);
 
     if (!isSameMonth(date, currentMonth)) {
       setCurrentMonth(startOfMonth(date));
     } else if (!isSameDay(newSelectedDate, selectedDate)) {
-      // If just the day changed (same month), we need to refetch schedules for the new day
       setIsLoading(true);
-      fetchData(); // This will use the updated selectedDate value in next render
+      fetchData();
     }
   };
 
@@ -295,14 +295,12 @@ export default function Home() {
     setCurrentMonth(startOfMonth(today));
   };
 
-  const showDatePickerModal = () => setShowPicker(true); // Renamed for clarity
   const onDateChangeFromPicker = (
     event: DateTimePickerEvent,
     newSelectedDate?: Date
   ) => {
-    setShowPicker(Platform.OS === "ios"); // Keep picker open on iOS until done
+    setShowPicker(Platform.OS === "ios");
     if (event.type === "set" && newSelectedDate) {
-      // 'set' means user picked a date
       const chosenDate = startOfDay(newSelectedDate);
       setSelectedDate(chosenDate);
       if (!isSameMonth(chosenDate, currentMonth)) {
@@ -318,14 +316,12 @@ export default function Home() {
       try {
         return isSameDay(parseISO(schedule.date), selectedDate);
       } catch {
-        return false; // In case date parsing fails
+        return false;
       }
     })
     .sort((a, b) => {
-      // More robust time sorting
       const parseTime = (timeStr: string) => {
         try {
-          // Convert "9:00 AM", "14:00", etc. to comparable values
           const normalizedTime = timeStr.trim().toUpperCase();
           const isPM =
             normalizedTime.includes("PM") && !normalizedTime.includes("12:");
@@ -338,47 +334,15 @@ export default function Home() {
           let hoursNum = parseInt(hours, 10);
 
           if (isPM && hoursNum < 12) hoursNum += 12;
-          if (isAM12) hoursNum = 0; // 12 AM = 0 hours
+          if (isAM12) hoursNum = 0;
 
           return hoursNum * 60 + parseInt(minutes || "0", 10);
         } catch {
-          return 0; // Default if parsing fails
+          return 0;
         }
       };
 
       return parseTime(a.startTime) - parseTime(b.startTime);
-    })
-    .slice(0, 3);
-
-  // Enhance events filtering to show all events for selected date including multi-day events
-  const filteredEventsForSelectedDate = monthlyEvents
-    .filter((event) => {
-      if (!event.startDate) return false;
-
-      try {
-        // Handle single day events
-        if (isSameDay(parseISO(event.startDate), selectedDate)) return true;
-
-        // Handle multi-day events
-        if (event.endDate) {
-          const startDate = parseISO(event.startDate);
-          const endDate = parseISO(event.endDate);
-          return selectedDate >= startDate && selectedDate <= endDate;
-        }
-
-        return false;
-      } catch {
-        return false; // In case date parsing fails
-      }
-    })
-    .sort((a, b) => {
-      try {
-        return (
-          parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime()
-        );
-      } catch {
-        return 0;
-      }
     })
     .slice(0, 3);
 
@@ -390,7 +354,6 @@ export default function Home() {
       .filter((event) => {
         try {
           const eventStartDate = parseISO(event.startDate);
-          // Include events that start today or in the future
           return eventStartDate >= today;
         } catch {
           return false;
@@ -405,27 +368,25 @@ export default function Home() {
           return 0;
         }
       })
-      .slice(0, 5); // Show top 5 upcoming events
+      .slice(0, 5);
   }, [monthlyEvents]);
 
   // Filter todos to get the most important incomplete ones
   const filteredTopTodos = allTodos
-    .filter((todo) => !todo.completed) // Only show incomplete todos
+    .filter((todo) => !todo.completed)
     .sort((a, b) => {
-      // Sort by due date if available
       if (a.dueDate && b.dueDate) {
         return parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime();
       }
-      if (a.dueDate) return -1; // Todos with due dates come first
+      if (a.dueDate) return -1;
       if (b.dueDate) return 1;
       return 0;
     })
-    .slice(0, 3); // Get top 3 todos
+    .slice(0, 5);
 
   const formatScheduleTime = (start: string, end: string): string => {
-    const normalize = (time: string) => time.replace(".", ":"); // Basic normalization
+    const normalize = (time: string) => time.replace(".", ":");
     try {
-      // This is a naive attempt to format, consider a robust time parsing library if formats vary wildly
       const formatIfPossible = (timeStr: string) => {
         const [hourMinute, period] = timeStr.split(" ");
         const [hour, minute] = hourMinute.split(":");
@@ -439,37 +400,13 @@ export default function Home() {
         ) {
           return `${hour}:${minute}${period ? " " + period : ""}`;
         }
-        return timeStr; // fallback
+        return timeStr;
       };
       return `${formatIfPossible(normalize(start))} - ${formatIfPossible(
         normalize(end)
       )}`;
     } catch {
       return `${normalize(start)} - ${normalize(end)}`;
-    }
-  };
-
-  // Enhance event time display to show multi-day indicator
-  const formatEventTime = (startISO: string, endISO?: string): string => {
-    try {
-      // If it's a multi-day event spanning over the selected date
-      if (endISO && !isSameDay(parseISO(startISO), selectedDate)) {
-        // If we're on the end date
-        if (isSameDay(parseISO(endISO), selectedDate)) {
-          return `Until ${format(parseISO(endISO), "h:mm a")}`;
-        }
-        // If we're in the middle of a multi-day event
-        if (
-          selectedDate > parseISO(startISO) &&
-          selectedDate < parseISO(endISO)
-        ) {
-          return "All day";
-        }
-      }
-
-      return format(parseISO(startISO), "h:mm a");
-    } catch {
-      return "Invalid time";
     }
   };
 
@@ -773,21 +710,23 @@ export default function Home() {
                           className={`w-1.5 h-full ${categoryColor} rounded-full mr-3 self-stretch`}
                         />
                         <View className="flex-1">
-                          <View className="flex-row justify-between items-center mb-0.5">
-                            <Text className="font-urbanistBold text-base text-cyan-800">
+                          <View className="flex-row justify-between items-start">
+                            <Text
+                              className="font-urbanistMedium text-base text-gray-800 flex-1 mr-2"
+                              numberOfLines={1}
+                              ellipsizeMode="tail">
+                              {item.category}
+                            </Text>
+                            <Text className="font-urbanist text-sm text-cyan-600">
                               {formatScheduleTime(item.startTime, item.endTime)}
                             </Text>
-                            <View
-                              className={`px-2 py-0.5 ${categoryColor} rounded-full`}>
-                              <Text className="font-urbanistMedium text-xs text-white">
-                                {item.category || "No Category"}
-                              </Text>
-                            </View>
                           </View>
                           {item.note && (
-                            <Text className="font-urbanist text-gray-600 text-sm mt-0.5">
-                              {item.note.substring(0, 60)}
-                              {item.note.length > 60 ? "..." : ""}
+                            <Text
+                              className="font-urbanist text-sm text-gray-500 mt-1"
+                              numberOfLines={2}
+                              ellipsizeMode="tail">
+                              {item.note}
                             </Text>
                           )}
                         </View>

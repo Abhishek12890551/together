@@ -1,11 +1,37 @@
 import "../global.css";
-import React from "react";
-import { Slot } from "expo-router";
+import React, { useEffect } from "react";
+import { Slot, useRouter } from "expo-router";
 import { useFonts } from "expo-font";
-import { useEffect } from "react";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { SocketProvider } from "./contexts/SocketContext";
 import { OnlineStatusProvider } from "./contexts/OnlineStatusContext";
+import * as SplashScreen from "expo-splash-screen";
+
+SplashScreen.preventAutoHideAsync();
+
+function RootLayoutNav() {
+  const { isLoading, token } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    const handleAuthAndNavigation = async () => {
+      if (!isLoading) {
+        if (!token) {
+          router.replace("/welcome");
+        }
+        await SplashScreen.hideAsync();
+      }
+    };
+
+    handleAuthAndNavigation();
+  }, [isLoading, token, router]);
+
+  if (isLoading) {
+    return null;
+  }
+
+  return <Slot />;
+}
 
 export default function _layout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -29,13 +55,20 @@ export default function _layout() {
   useEffect(() => {
     if (fontError) {
       console.error("Font loading error:", fontError);
+      // Optionally hide splash screen here if fonts fail critically,
+      // though usually you'd want to show an error UI instead.
+      // SplashScreen.hideAsync();
     }
     if (fontsLoaded) {
       console.log("Fonts loaded successfully.");
+      // Don't hide splash screen here yet, wait for auth in RootLayoutNav
     }
+    // If fonts are still loading, SplashScreen.preventAutoHideAsync() keeps it visible.
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) {
+    // While fonts are loading, _layout returns null,
+    // and SplashScreen (kept visible by preventAutoHideAsync) remains.
     return null;
   }
 
@@ -43,7 +76,7 @@ export default function _layout() {
     <AuthProvider>
       <SocketProvider>
         <OnlineStatusProvider>
-          <Slot />
+          <RootLayoutNav />
         </OnlineStatusProvider>
       </SocketProvider>
     </AuthProvider>

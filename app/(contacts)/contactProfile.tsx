@@ -17,6 +17,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import axiosInstance from "../../utils/axiosInstance";
 import { useSocket } from "../contexts/SocketContext";
 import { LinearGradient } from "expo-linear-gradient";
+import { useAuth } from "../contexts/AuthContext"; // Added import
 
 interface ContactData {
   _id: string;
@@ -31,6 +32,7 @@ interface ContactData {
 export default function ContactProfile() {
   const router = useRouter();
   const { contactId } = useLocalSearchParams<{ contactId: string }>();
+  const { user } = useAuth(); // Added
   const [contactData, setContactData] = useState<ContactData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -218,10 +220,23 @@ export default function ContactProfile() {
     }
   };
 
-  const startConversation = () => {
-    if (!contactId) return;
+  const startConversation = async () => {
+    if (!contactId || !user) return;
 
-    router.push(`/new?recipientId=${contactId}`);
+    try {
+      const response = await axiosInstance.get(
+        `/conversations/find/${contactId}`
+      );
+
+      if (response.data.success && response.data.conversationId) {
+        router.push(`/(conversation)/${response.data.conversationId}`);
+      } else {
+        router.push(`/new?recipientId=${contactId}`);
+      }
+    } catch (error) {
+      console.error("Error checking for existing conversation:", error);
+      router.push(`/new?recipientId=${contactId}`);
+    }
   };
 
   if (isLoading) {
@@ -364,7 +379,7 @@ export default function ContactProfile() {
             <View className="flex-row items-center mt-3 bg-white/20 rounded-full px-3 py-1 backdrop-blur-md">
               <Ionicons name="calendar-outline" size={14} color="white" />
               <Text className="text-xs font-urbanist text-white ml-1">
-                Joined 
+                Joined{" "}
                 {new Date(contactData.joinDate).toLocaleDateString("en-US", {
                   year: "numeric",
                   month: "short",
@@ -377,25 +392,22 @@ export default function ContactProfile() {
 
         {/* Action Buttons */}
         <View className="flex-row justify-around items-center px-4 py-6 bg-white mb-4 rounded-t-3xl -mt-6 border-b border-gray-100">
-            <TouchableOpacity
+          <TouchableOpacity
             className="items-center flex-1 mx-2"
             onPressIn={() => handlePressIn(buttonScale)}
             onPressOut={() => handlePressOut(buttonScale)}
-            onPress={() => {
-              if (!contactId) return;
-              router.push(`/(conversation)/${contactId}`);
-            }}>
+            onPress={startConversation}>
             <Animated.View
               className="w-16 h-16 rounded-full bg-cyan-500 items-center justify-center mb-2 border-2 border-cyan-200"
               style={{
-              transform: [{ scale: buttonScale }],
+                transform: [{ scale: buttonScale }],
               }}>
               <Ionicons name="chatbubble-outline" size={28} color="white" />
             </Animated.View>
             <Text className="text-sm font-urbanistBold text-cyan-700">
               Message
             </Text>
-            </TouchableOpacity>
+          </TouchableOpacity>
 
           <TouchableOpacity
             className="items-center flex-1 mx-2"

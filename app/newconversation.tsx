@@ -69,7 +69,7 @@ export default function NewConversation() {
   const mutedTextColor = "#9ca3af"; // Gray-400
   const backgroundColor = "#ecfeff"; // Cyan-50
   const accentColor = "#ef4444"; // Red-500
-  const lightBgClass = "bg-white/80"; // White with opacity
+  const lightBgClass = "bg-white/80";
 
   useEffect(() => {
     fetchContacts();
@@ -198,11 +198,36 @@ export default function NewConversation() {
     }
   };
 
-  const startConversation = (contactId: string) => {
-    router.push({
-      pathname: "/(conversation)/new",
-      params: { recipientId: contactId },
-    });
+  const startConversation = async (contactId: string) => {
+    try {
+      // Check if a conversation already exists
+      const response = await axiosInstance.get(
+        `/conversations/find/${contactId}`
+      );
+      if (response.data.success && response.data.conversationId) {
+        // Conversation exists, navigate to it
+        router.push({
+          pathname: `/(conversation)/[conversationId]`,
+          params: {
+            conversationId: response.data.conversationId,
+            recipientId: contactId,
+          }, // Pass conversationId as a param
+        });
+      } else {
+        // Conversation does not exist or error, navigate to create new
+        router.push({
+          pathname: "/(conversation)/new",
+          params: { recipientId: contactId },
+        });
+      }
+    } catch (error) {
+      console.error("Error finding or starting conversation:", error);
+      // Fallback to creating a new conversation if the check fails
+      router.push({
+        pathname: "/(conversation)/new",
+        params: { recipientId: contactId },
+      });
+    }
   };
 
   const handleGroupCreated = () => {

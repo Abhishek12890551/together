@@ -108,55 +108,30 @@ const TypingIndicator = ({
   user: string;
   profileImg?: string | null;
 }) => {
-  const [avatarScale, setAvatarScale] = useState(1);
-
-  useEffect(() => {
-    let mounted = true;
-    let timeoutId: ReturnType<typeof setTimeout>;
-
-    const animateAvatar = () => {
-      setAvatarScale(1.05);
-      timeoutId = setTimeout(() => {
-        if (mounted) {
-          setAvatarScale(1);
-          timeoutId = setTimeout(() => {
-            if (mounted) {
-              animateAvatar();
-            }
-          }, 600);
-        }
-      }, 600);
-    };
-
-    animateAvatar();
-
-    return () => {
-      mounted = false;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, []);
-
   return (
-    <View className="px-3 py-1">
-      <View className="flex-row items-center bg-white rounded-xl p-1 pl-2 shadow-sm max-w-[50%]">
-        {/* Animated Avatar */}
-        <View style={{ transform: [{ scale: avatarScale }] }}>
+    <View className="flex-row items-center p-2 ml-3 self-start my-1">
+      <View className="flex-row items-center bg-cyan-100 rounded-2xl px-3 py-2 shadow-md border border-cyan-200">
+        <View className="mr-2">
           {profileImg ? (
             <Image
               source={{ uri: profileImg }}
-              className="h-5 w-5 rounded-full mr-1"
+              className="h-6 w-6 rounded-full"
+              defaultSource={require("../../assets/images/together-icon.png")}
             />
           ) : (
-            <View className="h-5 w-5 rounded-full bg-cyan-200 items-center justify-center mr-1">
-              <Ionicons name="person" size={10} color="#0891b2" />
+            <View className="h-6 w-6 rounded-full bg-cyan-200 items-center justify-center">
+              <Ionicons name="person" size={12} color="#0891b2" />
             </View>
           )}
         </View>
         <View className="flex-row items-center">
-          <Text className="text-xs text-cyan-700 font-urbanist mr-1">
+          <Text className="text-sm font-urbanistMedium text-cyan-700 mr-1.5">
             {user}
           </Text>
-          <View className="flex-row items-center">
+          <Text className="text-xs font-urbanist text-cyan-600 mr-1">
+            is typing
+          </Text>
+          <View className="flex-row items-center mt-0.5">
             <TypingDot delay={0} color="#0891b2" />
             <TypingDot delay={200} color="#0891b2" />
             <TypingDot delay={400} color="#0891b2" />
@@ -973,6 +948,7 @@ const ChatScreen = () => {
         backgroundColor="#ffffff"
         translucent={true}
       />
+      {/* Header */}
       <View className="p-4 bg-cyan-50 flex-row items-center border-b border-gray-200">
         <TouchableOpacity onPress={() => router.back()} className="mr-3">
           <Ionicons name="arrow-back" size={24} color="#0891b2" />
@@ -1087,7 +1063,7 @@ const ChatScreen = () => {
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "padding"}
         className="flex-1"
-        keyboardVerticalOffset={0}>
+        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}>
         {!isConnected && (
           <View className="bg-red-100 py-2 px-4 flex-row items-center justify-between">
             <View>
@@ -1119,6 +1095,7 @@ const ChatScreen = () => {
             keyExtractor={(item) => item._id}
             className="flex-1 px-2 pt-2 bg-cyan-50"
             showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 10 }}
             onScroll={(event) => {
               const offsetFromBottom =
                 event.nativeEvent.contentSize.height -
@@ -1143,7 +1120,7 @@ const ChatScreen = () => {
               flatListRef.current?.scrollToEnd({ animated: false });
             }}
             ListFooterComponent={() => (
-              <View style={{ minHeight: 24 }}>
+              <View style={{ minHeight: 48 }}>
                 {isTyping && typingUserName ? (
                   <TypingIndicator
                     user={typingUserName}
@@ -1162,7 +1139,8 @@ const ChatScreen = () => {
                 setShowScrollToBottom(false);
                 setHasNewMessages(false);
               }}
-              className="absolute bottom-4 right-4 bg-cyan-600 h-10 w-10 rounded-full items-center justify-center shadow-md">
+              className="absolute bottom-4 right-4 bg-cyan-600 h-10 w-10 rounded-full items-center justify-center shadow-md z-10">
+              {/* Ensure button is above list content */}
               {hasNewMessages && (
                 <View className="absolute top-0 right-0 h-3 w-3 bg-red-500 rounded-full" />
               )}
@@ -1170,14 +1148,16 @@ const ChatScreen = () => {
             </TouchableOpacity>
           )}
         </View>
-        <View className="flex-row items-center border-t px-4 py-4 border-gray-200 bg-cyan-50">
+        {/* Message Input Area */}
+        <View className="flex-row items-center border-t px-4 py-3 border-gray-200 bg-cyan-50">
           <TextInput
             value={inputText}
             onChangeText={onInputTextChanged}
             placeholder="Type a message..."
-            className="flex-1 h-12 bg-white rounded-full px-4 mr-2 font-urbanist"
+            className="flex-1 h-10 bg-white rounded-full px-4 mr-2 font-urbanist"
             multiline
             editable={true}
+            style={{ minHeight: 40 }}
           />
           <TouchableOpacity
             onPress={handleSend}
